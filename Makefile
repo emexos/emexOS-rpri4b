@@ -1,8 +1,18 @@
-CFILES = $(wildcard *.c)
+# Verzeichnisse definieren
+SRCDIR = src
+BOOTDIR = boot
+KERNELDIR = $(SRCDIR)/kernel
+LIBDIR = $(SRCDIR)/lib
+INCDIR = $(SRCDIR)/include
+
+# Source-Dateien aus verschiedenen Verzeichnissen
+CFILES = $(wildcard $(KERNELDIR)/*.c) $(wildcard $(LIBDIR)/*.c)
 OFILES = $(CFILES:.c=.o)
+
+# Tools
 LLVMPATH = /opt/homebrew/opt/llvm/bin
 LLDPATH = /opt/homebrew/opt/lld/bin
-CLANGFLAGS = -Wall -O2 -ffreestanding -nostdinc -nostdlib -mcpu=cortex-a72+nosimd
+CLANGFLAGS = -Wall -O2 -ffreestanding -nostdinc -nostdlib -mcpu=cortex-a72+nosimd -I$(INCDIR)
 
 # QEMU Einstellungen für Raspberry Pi 4
 QEMU = qemu-system-aarch64
@@ -17,49 +27,54 @@ QEMU_DISPLAY_FLAGS = -display sdl,window-close=off,gl=off -device usb-mouse -dev
 
 all: clean kernel8.img run
 
-boot.o: boot.S
-	$(LLVMPATH)/clang --target=aarch64-elf $(CLANGFLAGS) -c boot.S -o boot.o
-
-%.o: %.c
+$(BOOTDIR)/boot.o: $(BOOTDIR)/boot.S
 	$(LLVMPATH)/clang --target=aarch64-elf $(CLANGFLAGS) -c $< -o $@
 
-kernel8.img: boot.o $(OFILES)
-	$(LLDPATH)/ld.lld -m aarch64elf -nostdlib boot.o $(OFILES) -T link.ld -o kernel8.elf
+$(KERNELDIR)/%.o: $(KERNELDIR)/%.c
+	$(LLVMPATH)/clang --target=aarch64-elf $(CLANGFLAGS) -c $< -o $@
+
+$(LIBDIR)/%.o: $(LIBDIR)/%.c
+	$(LLVMPATH)/clang --target=aarch64-elf $(CLANGFLAGS) -c $< -o $@
+
+kernel8.img: $(BOOTDIR)/boot.o $(OFILES)
+	$(LLDPATH)/ld.lld -m aarch64elf -nostdlib $(BOOTDIR)/boot.o $(OFILES) -T $(BOOTDIR)/link.ld -o kernel8.elf
 	$(LLVMPATH)/llvm-objcopy -O binary kernel8.elf kernel8.img
 
-# QEMU starten (automatische Display-Erkennung mit kleinerem Fenster)
+
 run: kernel8.img
 	@echo "Starte Raspberry Pi 4 OS in QEMU..."
 	@echo "Zum Beenden: Ctrl+A, dann X drücken"
-	@if $(QEMU) $(QEMU_FLAGS) -display sdl,window-close=off,gl=off,zoom-to-fit=off 2>/dev/null; then \
+	@if $(QEMU) $(QEMU_FLAGS) -display sdl,window-close=off,gl=off,zoom-to-fit=on 2>/dev/null; then \
 		echo "SDL Display verwendet (kleine Fenstergröße)"; \
-	elif $(QEMU) $(QEMU_FLAGS) -display cocoa,zoom-to-fit=off 2>/dev/null; then \
+	elif $(QEMU) $(QEMU_FLAGS) -display cocoa,zoom-to-fit=on 2>/dev/null; then \
 		echo "Cocoa Display verwendet (macOS, kleine Fenstergröße)"; \
 	else \
 		echo "Fallback auf VNC - Verbinde mit VNC-Client auf localhost:5900"; \
 		$(QEMU) $(QEMU_FLAGS) -display vnc=:0; \
 	fi
 
-run-cocoa: kernel8.img
-	@echo "Starte mit Cocoa Display (macOS, kleine Fenstergröße)..."
-	$(QEMU) $(QEMU_FLAGS) -display cocoa,zoom-to-fit=off
-
-run-small: kernel8.img
-	@echo "Starte mit explizit kleiner Auflösung..."
-	$(QEMU) $(QEMU_FLAGS) -display sdl,window-close=off,gl=off,zoom-to-fit=off
-
-run-gui: kernel8.img
-	@echo "Starte Raspberry Pi 4 OS in QEMU mit GUI (kleines Fenster)..."
-	@$(QEMU) $(QEMU_FLAGS) -display sdl,window-close=off,gl=off,zoom-to-fit=off 2>/dev/null || \
-	 $(QEMU) $(QEMU_FLAGS) -display cocoa,zoom-to-fit=off 2>/dev/null || \
-	 $(QEMU) $(QEMU_FLAGS) -display vnc=:0
-
-# Neues Target für wirklich minimale Fenstergröße
-run-tiny: kernel8.img
-	@echo "Starte mit minimaler Fenstergröße..."
-	$(QEMU) $(QEMU_FLAGS) -display sdl,window-close=off,gl=off,zoom-to-fit=off,grab-on-hover=off
-
 clean:
-	/bin/rm kernel8.elf *.o *.img > /dev/null 2> /dev/null || true
+	@echo "Bereinige Build-Dateien..."
+	@rm -f kernel8.elf kernel8.img
+	@find . -name "*.o" -type f -delete
+	@echo "Bereinigung abgeschlossen."
 
-.PHONY: all clean run run-headless run-sdl run-cocoa run-vnc run-gui run-small run-tiny debug install-qemu qemu-info
+debug-files:
+	@echo "Boot-Verzeichnis: $(BOOTDIR)"
+	@echo "Source-Verzeichnis: $(SRCDIR)"
+	@echo "Include-Verzeichnis: $(INCDIR)"
+	@echo "Gefundene C-Dateien:"
+	@echo "$(CFILES)"
+	@echo "Generierte Object-Dateien:"
+	@echo "$(OFILES)"
+
+create-structure:
+	@echo "Erstelle Verzeichnisstruktur..."
+	@mkdir -p $(BOOTDIR)
+	@mkdir -p $(SRCDIR)/drivers
+	@mkdir -p $(INCDIR)
+	@mkdir -p $(KERNELDIR)
+	@mkdir -p $(LIBDIR)
+	@echo "Verzeichnisstruktur erstellt."
+
+.PHONY: all clean run debug-files create-structure
