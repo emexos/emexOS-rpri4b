@@ -1,6 +1,6 @@
 #include "../include/io.h"
 #include "../include/mb.h"
-#include "../include/terminal.h"
+#include "../include/font/terminal.h"
 
 unsigned int width, height, pitch, isrgb;
 unsigned char *fb;

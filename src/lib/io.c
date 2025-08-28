@@ -99,7 +99,7 @@ unsigned int uart_output_queue_write = 0;
 unsigned int uart_output_queue_read = 0;
 
 void uart_init() {
-    mmio_write(AUX_ENABLES, 1); //enable UART1
+    mmio_write(AUX_ENABLES, 1);    //enable UART1
     mmio_write(AUX_MU_IER_REG, 0);
     mmio_write(AUX_MU_CNTL_REG, 0);
     mmio_write(AUX_MU_LCR_REG, 3); //8 bits
@@ -132,7 +132,7 @@ void uart_writeByteBlockingActual(unsigned char ch) {
 void uart_loadOutputFifo() {
     while (!uart_isOutputQueueEmpty() && uart_isWriteByteReady()) {
         uart_writeByteBlockingActual(uart_output_queue[uart_output_queue_read]);
-        uart_output_queue_read = (uart_output_queue_read + 1) & (UART_MAX_QUEUE - 1); // Don't overrun
+        uart_output_queue_read = (uart_output_queue_read + 1) & (UART_MAX_QUEUE - 1);
     }
 }
 

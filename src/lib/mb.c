@@ -28,12 +28,10 @@ unsigned int mbox_call(unsigned char ch)
     mmio_write(MBOX_WRITE, r);
 
     while (1) {
-        // Is there a reply?
         while (mmio_read(MBOX_STATUS) & MBOX_EMPTY);
 
-        // Is it a reply to our message?
         if (r == mmio_read(MBOX_READ)) return mbox[1]==MBOX_RESPONSE; // Is it successful?
-
     }
+
     return 0;
 }
