@@ -62,10 +62,31 @@ void fb_init()
     }
 }
 
+int getFontPixel(char c, int x, int y) {
+    unsigned char uc = (unsigned char)c;
+
+    // dein Font startet bei ASCII 32 (Space)
+    if (uc < 32 || uc >= 32 + FONT_NUMGLYPHS) {
+        return 0; // unbekanntes Zeichen → leer
+    }
+
+    int glyphIndex = uc - 32; // ab Space (32)
+    unsigned char line = font[glyphIndex][y];
+    return (line >> x) & 1;
+}
+
 void drawPixel(int x, int y, unsigned char attr)
 {
     int offs = (y * pitch) + (x * 4);
     *((unsigned int*)(fb + offs)) = vgapal[attr & 0x0f];
+}
+
+void clearScreen(unsigned char color) {
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            drawPixel(x, y, color);
+        }
+    }
 }
 
 void drawRect(int x1, int y1, int x2, int y2, unsigned char attr, int fill)
@@ -80,6 +101,59 @@ void drawRect(int x1, int y1, int x2, int y2, unsigned char attr, int fill)
           x++;
        }
        y++;
+    }
+}
+
+void drawRoundedRect(int x1, int y1, int x2, int y2, int radius,
+                     unsigned char fillAttr, int fill,
+                     unsigned char borderAttr, int borderThickness) {
+    if (borderAttr < 0) borderAttr = fillAttr; // Default: Rand = Füllung
+    if (borderThickness < 1) borderThickness = 1;
+
+    for (int y = y1; y <= y2; y++) {
+        for (int x = x1; x <= x2; x++) {
+            int inCorner = 0;
+            int isBorder = 0;
+
+            // check corners
+            if (x < x1 + radius && y < y1 + radius) { // oben links
+                int dx = x - (x1 + radius);
+                int dy = y - (y1 + radius);
+                int dist2 = dx*dx + dy*dy;
+                if (dist2 > radius*radius) continue; // außerhalb
+                if (dist2 >= (radius-borderThickness)*(radius-borderThickness)) isBorder = 1;
+            } else if (x > x2 - radius && y < y1 + radius) { // oben rechts
+                int dx = x - (x2 - radius);
+                int dy = y - (y1 + radius);
+                int dist2 = dx*dx + dy*dy;
+                if (dist2 > radius*radius) continue;
+                if (dist2 >= (radius-borderThickness)*(radius-borderThickness)) isBorder = 1;
+            } else if (x < x1 + radius && y > y2 - radius) { // unten links
+                int dx = x - (x1 + radius);
+                int dy = y - (y2 - radius);
+                int dist2 = dx*dx + dy*dy;
+                if (dist2 > radius*radius) continue;
+                if (dist2 >= (radius-borderThickness)*(radius-borderThickness)) isBorder = 1;
+            } else if (x > x2 - radius && y > y2 - radius) { // unten rechts
+                int dx = x - (x2 - radius);
+                int dy = y - (y2 - radius);
+                int dist2 = dx*dx + dy*dy;
+                if (dist2 > radius*radius) continue;
+                if (dist2 >= (radius-borderThickness)*(radius-borderThickness)) isBorder = 1;
+            } else {
+                // gerader Teil
+                if ((x < x1 + borderThickness) || (x > x2 - borderThickness) ||
+                    (y < y1 + borderThickness) || (y > y2 - borderThickness)) {
+                    isBorder = 1;
+                }
+            }
+
+            if (isBorder) {
+                drawPixel(x, y, borderAttr);
+            } else if (fill) {
+                drawPixel(x, y, (fillAttr & 0xf0) >> 4);
+            }
+        }
     }
 }
 
@@ -155,6 +229,23 @@ void drawChar(unsigned char ch, int x, int y, unsigned char attr)
     }
 }
 
+void drawCharSized(char c, int x, int y, unsigned char attr, int size)
+{
+    int scale = size / FONT_WIDTH;   // FONT_WIDTH = 8 → size=16 => scale=2
+
+    for (int dy = 0; dy < FONT_HEIGHT; dy++) {
+        for (int dx = 0; dx < FONT_WIDTH; dx++) {
+            if (getFontPixel(c, dx, dy)) {
+                for (int sy = 0; sy < scale; sy++) {
+                    for (int sx = 0; sx < scale; sx++) {
+                        drawPixel(x + dx*scale + sx, y + dy*scale + sy, attr);
+                    }
+                }
+            }
+        }
+    }
+}
+
 void drawString(int x, int y, char *s, unsigned char attr)
 {
     while (*s) {
@@ -167,5 +258,22 @@ void drawString(int x, int y, char *s, unsigned char attr)
           x += FONT_WIDTH;
        }
        s++;
+    }
+}
+
+void drawStringSized(int x, int y, char *s, unsigned char attr, int size)
+{
+    int scale = size / FONT_WIDTH;
+
+    while (*s) {
+        if (*s == '\r') {
+            x = 0;
+        } else if (*s == '\n') {
+            x = 0; y += FONT_HEIGHT * scale;
+        } else {
+            drawCharSized(*s, x, y, attr, size);
+            x += FONT_WIDTH * scale;
+        }
+        s++;
     }
 }

@@ -2,6 +2,7 @@
 
 void uart_init();
 void uart_writeText(char *buffer);
+char uart_getc(void);
 void uart_loadOutputFifo();
 unsigned char uart_readByte();
 unsigned int uart_isReadByteReady();
